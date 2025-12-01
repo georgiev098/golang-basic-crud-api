@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/georgiev098/golang-basic-crud-api/internal/api/middleware"
 )
 
 const PORT = "3000"
@@ -48,7 +50,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:      ":" + PORT,
-		Handler:   mux,
+		Handler:   middleware.Compression(mux),
 		TLSConfig: tlsConfig,
 	}
 
