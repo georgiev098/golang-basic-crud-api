@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/georgiev098/golang-basic-crud-api/internal/api/middleware"
+	"github.com/georgiev098/golang-basic-crud-api/internal/middlewares"
 )
 
 const PORT = "3000"
@@ -48,9 +50,20 @@ func main() {
 		MinVersion: tls.VersionTLS12,
 	}
 
+	rl := middlewares.NewRateLimiter(5, time.Minute)
+
+	hppOptions := middlewares.HPPOptions{
+		CheckQuery:                  true,
+		CheckBody:                   true,
+		CheckBodyOnlyForContentType: "application/x-www-from-urlencoded",
+		Whitelist:                   []string{"sortBy", "sortOrder", "name", "age", "class"},
+	}
+
+	secureMux := middlewares.Hpp(hppOptions)(rl.Middleware(middleware.Compression(mux)))
+
 	server := &http.Server{
 		Addr:      ":" + PORT,
-		Handler:   middleware.Compression(mux),
+		Handler:   secureMux,
 		TLSConfig: tlsConfig,
 	}
 
