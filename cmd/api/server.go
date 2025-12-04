@@ -17,11 +17,11 @@ import (
 const PORT = "3000"
 
 type Teacher struct {
-	ID        int
-	FirstName string
-	LastName  string
-	Class     string
-	Subject   string
+	ID        int    `json:"id,omitempty"`
+	FirstName string `json:"first_name,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
+	Class     string `json:"class,omitempty"`
+	Subject   string `json:"sbuject,omitempty"`
 }
 
 var (
@@ -49,7 +49,7 @@ func init() {
 
 }
 
-func getTeaches(w http.ResponseWriter, r *http.Request) {
+func getTeacher(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/teachers")
 	idStr := strings.TrimSuffix(path, "/")
 
@@ -94,6 +94,42 @@ func getTeaches(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(teacher)
 }
 
+func addTeacher(w http.ResponseWriter, r *http.Request) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	var newTeachers []Teacher
+	err := json.NewDecoder(r.Body).Decode(&newTeachers)
+	if err != nil {
+		http.Error(w, "invalid request Body", http.StatusBadRequest)
+		return
+	}
+
+	addedTeachers := make([]Teacher, len(newTeachers))
+
+	for i, newTeacher := range newTeachers {
+		newTeacher.ID = nextId
+		teachers[nextId] = newTeacher
+		addedTeachers[i] = newTeacher
+		nextId++
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	resp := struct {
+		Status string    `json:"status"`
+		Count  int       `json:"count"`
+		Data   []Teacher `jsom:"data"`
+	}{
+		Status: "success",
+		Count:  len(addedTeachers),
+		Data:   addedTeachers,
+	}
+
+	json.NewEncoder(w).Encode(resp)
+
+}
+
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Hello from the root route"))
 }
@@ -101,7 +137,9 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 func teachersHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		getTeaches(w, r)
+		getTeacher(w, r)
+	case http.MethodPost:
+		addTeacher(w, r)
 	}
 }
 
