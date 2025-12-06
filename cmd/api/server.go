@@ -8,6 +8,7 @@ import (
 
 	"github.com/georgiev098/golang-basic-crud-api/internal/api/middleware"
 	"github.com/georgiev098/golang-basic-crud-api/internal/middlewares"
+	"github.com/georgiev098/golang-basic-crud-api/internal/repository/sqlconnect"
 	"github.com/georgiev098/golang-basic-crud-api/internal/router"
 	"github.com/georgiev098/golang-basic-crud-api/pkg/utils"
 )
@@ -15,6 +16,12 @@ import (
 const PORT = "3000"
 
 func main() {
+	// connect to DB
+	db, err := sqlconnect.ConnectToDB("school")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
 	cert := "certs/localhost.crt"
 	key := "certs/localhost.key"
@@ -44,7 +51,7 @@ func main() {
 		TLSConfig: tlsConfig,
 	}
 
-	err := server.ListenAndServeTLS(cert, key)
+	err = server.ListenAndServeTLS(cert, key)
 
 	if err != nil {
 		log.Fatal("Error starting the server: ", err)
