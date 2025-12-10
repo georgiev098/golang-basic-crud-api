@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,24 +19,24 @@ var (
 	nextId   = 1
 )
 
-func init() {
-	teachers[nextId] = models.Teacher{
-		ID:        nextId,
-		FirstName: "John",
-		LastName:  "Doe",
-		Class:     "9A",
-		Subject:   "Math",
-	}
-	nextId++
-	teachers[nextId] = models.Teacher{
-		ID:        nextId,
-		FirstName: "Jane",
-		LastName:  "Doe",
-		Class:     "10A",
-		Subject:   "Algebra",
-	}
+// func init() {
+// 	teachers[nextId] = models.Teacher{
+// 		ID:        nextId,
+// 		FirstName: "John",
+// 		LastName:  "Doe",
+// 		Class:     "9A",
+// 		Subject:   "Math",
+// 	}
+// 	nextId++
+// 	teachers[nextId] = models.Teacher{
+// 		ID:        nextId,
+// 		FirstName: "Jane",
+// 		LastName:  "Doe",
+// 		Class:     "10A",
+// 		Subject:   "Algebra",
+// 	}
 
-}
+// }
 
 func addTeacher(w http.ResponseWriter, r *http.Request) {
 	// connect to DB
@@ -102,7 +103,14 @@ func addTeacher(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTeacher(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/teachers")
+	db, err := sqlconnect.ConnectToDB("school")
+	if err != nil {
+		http.Error(w, "Could not establish DB connection.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
 	idStr := strings.TrimSuffix(path, "/")
 
 	if idStr == "" {
@@ -137,12 +145,17 @@ func getTeacher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teacher, exists := teachers[idNum]
-	if !exists {
+	var teacher models.Teacher
+	err = db.QueryRow("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE id = ?", idNum).Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
+	if err == sql.ErrNoRows {
 		http.Error(w, "Teacher not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Database query error", http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(teacher)
 }
 
