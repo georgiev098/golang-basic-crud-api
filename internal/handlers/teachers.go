@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/georgiev098/golang-basic-crud-api/internal/models"
+	"github.com/georgiev098/golang-basic-crud-api/internal/repository/sqlconnect"
 )
 
 var (
@@ -37,24 +38,52 @@ func init() {
 }
 
 func addTeacher(w http.ResponseWriter, r *http.Request) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	// connect to DB
+	db, err := sqlconnect.ConnectToDB("school")
+	if err != nil {
+		http.Error(w, "Could not establish DB connection.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
 
 	var newTeachers []models.Teacher
-	err := json.NewDecoder(r.Body).Decode(&newTeachers)
+	err = json.NewDecoder(r.Body).Decode(&newTeachers)
 	if err != nil {
 		http.Error(w, "invalid request Body", http.StatusBadRequest)
 		return
 	}
 
-	addedTeachers := make([]models.Teacher, len(newTeachers))
-
-	for i, newTeacher := range newTeachers {
-		newTeacher.ID = nextId
-		teachers[nextId] = newTeacher
-		addedTeachers[i] = newTeacher
-		nextId++
+	stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES (?,?,?,?,?)")
+	if err != nil {
+		http.Error(w, "Error in preparing DB query", http.StatusInternalServerError)
+		return
 	}
+	defer stmt.Close()
+
+	addedTeachers := make([]models.Teacher, len(newTeachers))
+	for i, newTeacher := range newTeachers {
+		resp, err := stmt.Exec(
+			newTeacher.FirstName,
+			newTeacher.LastName,
+			newTeacher.Email,
+			newTeacher.Class,
+			newTeacher.Subject,
+		)
+		if err != nil {
+			http.Error(w, "Error inserting data into DB.", http.StatusInternalServerError)
+			return
+		}
+
+		newId, err := resp.LastInsertId()
+		if err != nil {
+			http.Error(w, "Error getting newly created ID.", http.StatusInternalServerError)
+			return
+		}
+		newTeacher.ID = int(newId)
+		addedTeachers[i] = newTeacher
+
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
