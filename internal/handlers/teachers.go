@@ -7,36 +7,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/georgiev098/golang-basic-crud-api/internal/models"
 	"github.com/georgiev098/golang-basic-crud-api/internal/repository/sqlconnect"
 )
-
-var (
-	teachers = make(map[int]models.Teacher)
-	mutex    = &sync.Mutex{}
-	nextId   = 1
-)
-
-// func init() {
-// 	teachers[nextId] = models.Teacher{
-// 		ID:        nextId,
-// 		FirstName: "John",
-// 		LastName:  "Doe",
-// 		Class:     "9A",
-// 		Subject:   "Math",
-// 	}
-// 	nextId++
-// 	teachers[nextId] = models.Teacher{
-// 		ID:        nextId,
-// 		FirstName: "Jane",
-// 		LastName:  "Doe",
-// 		Class:     "10A",
-// 		Subject:   "Algebra",
-// 	}
-
-// }
 
 func addTeacher(w http.ResponseWriter, r *http.Request) {
 	// connect to DB
@@ -114,21 +88,11 @@ func getTeacher(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimSuffix(path, "/")
 
 	if idStr == "" {
-		firstName := r.URL.Query().Get("first_name")
-		lastName := r.URL.Query().Get("last_name")
-
 		query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
-		var args []interface{}
 
-		if firstName != "" {
-			query += " AND first_name = ?"
-			args = append(args, firstName)
-		}
+		var args []any
 
-		if lastName != "" {
-			query += " AND last_name = ?"
-			args = append(args, lastName)
-		}
+		query, args = addFilters(r, query, args)
 
 		rows, err := db.Query(query, args...)
 
@@ -185,6 +149,26 @@ func getTeacher(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(teacher)
+}
+
+func addFilters(r *http.Request, query string, args []any) (string, []any) {
+	params := map[string]string{
+		"first_name": "first_name",
+		"last_name":  "last_name",
+		"email":      "email",
+		"class":      "class",
+		"subject":    "subject",
+	}
+
+	for param, dbField := range params {
+		value := r.URL.Query().Get(param)
+		if value != "" {
+			query += " AND " + dbField + " = ?"
+			args = append(args, value)
+		}
+	}
+
+	return query, args
 }
 
 func TeachersHandler(w http.ResponseWriter, r *http.Request) {
