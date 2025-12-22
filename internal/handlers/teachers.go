@@ -116,12 +116,40 @@ func getTeacher(w http.ResponseWriter, r *http.Request) {
 	if idStr == "" {
 		firstName := r.URL.Query().Get("first_name")
 		lastName := r.URL.Query().Get("last_name")
-		teacherList := make([]models.Teacher, 0, len(teachers))
 
-		for _, v := range teachers {
-			if (firstName == "" || v.FirstName == firstName) && (lastName == "" || v.LastName == lastName) {
-				teacherList = append(teacherList, v)
+		query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
+		var args []interface{}
+
+		if firstName != "" {
+			query += " AND first_name = ?"
+			args = append(args, firstName)
+		}
+
+		if lastName != "" {
+			query += " AND last_name = ?"
+			args = append(args, lastName)
+		}
+
+		rows, err := db.Query(query, args...)
+
+		if err != nil {
+			http.Error(w, "Database query error.", http.StatusInternalServerError)
+			fmt.Print(err)
+		}
+
+		defer rows.Close()
+
+		teacherList := make([]models.Teacher, 0)
+		for rows.Next() {
+			var teacher models.Teacher
+
+			err := rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
+			if err != nil {
+				http.Error(w, "Database scanning db results.", http.StatusInternalServerError)
+				fmt.Print(err)
 			}
+
+			teacherList = append(teacherList, teacher)
 		}
 
 		resp := struct {
