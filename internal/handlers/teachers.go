@@ -14,7 +14,7 @@ import (
 	"github.com/georgiev098/golang-basic-crud-api/internal/repository/sqlconnect"
 )
 
-func addTeacher(w http.ResponseWriter, r *http.Request) {
+func AddTeacher(w http.ResponseWriter, r *http.Request) {
 	// connect to DB
 	db, err := sqlconnect.ConnectToDB("school")
 	if err != nil {
@@ -95,7 +95,7 @@ func isValidSortField(field string) bool {
 
 }
 
-func getTeacher(w http.ResponseWriter, r *http.Request) {
+func GetTeachers(w http.ResponseWriter, r *http.Request) {
 	db, err := sqlconnect.ConnectToDB("school")
 	if err != nil {
 		http.Error(w, "Could not establish DB connection.", http.StatusInternalServerError)
@@ -103,53 +103,59 @@ func getTeacher(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	path := strings.TrimPrefix(r.URL.Path, "/teachers/")
-	idStr := strings.TrimSuffix(path, "/")
+	query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
 
-	if idStr == "" {
-		query := "SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE 1=1"
+	var args []any
 
-		var args []any
+	query, args = addFilters(r, query, args)
 
-		query, args = addFilters(r, query, args)
+	query = addSorting(r, query)
 
-		query = addSorting(r, query)
+	rows, err := db.Query(query, args...)
 
-		rows, err := db.Query(query, args...)
+	if err != nil {
+		http.Error(w, "Database query error.", http.StatusInternalServerError)
+		fmt.Print(err)
+	}
 
+	defer rows.Close()
+
+	teacherList := make([]models.Teacher, 0)
+	for rows.Next() {
+		var teacher models.Teacher
+
+		err := rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
 		if err != nil {
-			http.Error(w, "Database query error.", http.StatusInternalServerError)
+			http.Error(w, "Database scanning db results.", http.StatusInternalServerError)
 			fmt.Print(err)
 		}
 
-		defer rows.Close()
-
-		teacherList := make([]models.Teacher, 0)
-		for rows.Next() {
-			var teacher models.Teacher
-
-			err := rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
-			if err != nil {
-				http.Error(w, "Database scanning db results.", http.StatusInternalServerError)
-				fmt.Print(err)
-			}
-
-			teacherList = append(teacherList, teacher)
-		}
-
-		resp := struct {
-			Status string           `json:"status"`
-			Count  int              `json:"count"`
-			Data   []models.Teacher `json:"data"`
-		}{
-			Status: "success",
-			Count:  len(teacherList),
-			Data:   teacherList,
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		teacherList = append(teacherList, teacher)
 	}
+
+	resp := struct {
+		Status string           `json:"status"`
+		Count  int              `json:"count"`
+		Data   []models.Teacher `json:"data"`
+	}{
+		Status: "success",
+		Count:  len(teacherList),
+		Data:   teacherList,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func GetTeacher(w http.ResponseWriter, r *http.Request) {
+	db, err := sqlconnect.ConnectToDB("school")
+	if err != nil {
+		http.Error(w, "Could not establish DB connection.", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	idStr := r.PathValue("id")
 
 	// handle path param
 	idNum, err := strconv.Atoi(idStr)
@@ -197,7 +203,7 @@ func addSorting(r *http.Request, query string) string {
 	return query
 }
 
-func updateTeacher(w http.ResponseWriter, r *http.Request) {
+func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/teachers/")
 
 	id, err := strconv.Atoi(idStr)
@@ -248,7 +254,7 @@ func updateTeacher(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(updatedTeacher)
 }
 
-func patchTeacher(w http.ResponseWriter, r *http.Request) {
+func PatchTeacher(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/teachers/")
 
 	id, err := strconv.Atoi(idStr)
@@ -315,7 +321,7 @@ func patchTeacher(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func deleteTeacher(w http.ResponseWriter, r *http.Request) {
+func DeleteTeacher(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/teachers/")
 
 	id, err := strconv.Atoi(idStr)
@@ -381,19 +387,4 @@ func addFilters(r *http.Request, query string, args []any) (string, []any) {
 	}
 
 	return query, args
-}
-
-func TeachersHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		getTeacher(w, r)
-	case http.MethodPost:
-		addTeacher(w, r)
-	case http.MethodPut:
-		updateTeacher(w, r)
-	case http.MethodPatch:
-		patchTeacher(w, r)
-	case http.MethodDelete:
-		deleteTeacher(w, r)
-	}
 }
