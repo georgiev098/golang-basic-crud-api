@@ -3,20 +3,19 @@ package sqlconnect
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/georgiev098/golang-basic-crud-api/internal/models"
+	"github.com/georgiev098/golang-basic-crud-api/pkg/utils"
 )
 
 func GetTeachersDB(teachers []models.Teacher, r *http.Request) ([]models.Teacher, error) {
 	db, err := ConnectToDB("school")
 	if err != nil {
-		// http.Error(w, "Could not establish DB connection.", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Could not establish DB connection.")
 	}
 	defer db.Close()
 
@@ -31,8 +30,7 @@ func GetTeachersDB(teachers []models.Teacher, r *http.Request) ([]models.Teacher
 	rows, err := db.Query(query, args...)
 
 	if err != nil {
-		// http.Error(w, "Database query error.", http.StatusInternalServerError)
-		fmt.Print(err)
+		return nil, utils.ErrorHandler(err, "Database query error.")
 	}
 
 	defer rows.Close()
@@ -43,9 +41,7 @@ func GetTeachersDB(teachers []models.Teacher, r *http.Request) ([]models.Teacher
 		err := rows.Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
 
 		if err != nil {
-			// http.Error(w, "Database scanning db results.", http.StatusInternalServerError)
-			fmt.Print(err)
-			return nil, err
+			return nil, utils.ErrorHandler(err, "Database scanning db results.")
 		}
 
 		teachers = append(teachers, teacher)
@@ -56,19 +52,16 @@ func GetTeachersDB(teachers []models.Teacher, r *http.Request) ([]models.Teacher
 func GetTeacherByIdDB(idNum int) (models.Teacher, error) {
 	db, err := ConnectToDB("school")
 	if err != nil {
-		// http.Error(w, "Could not establish DB connection.", http.StatusInternalServerError)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Could not establish DB connection.")
 	}
 	defer db.Close()
 
 	var teacher models.Teacher
 	err = db.QueryRow("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE id = ?", idNum).Scan(&teacher.ID, &teacher.FirstName, &teacher.LastName, &teacher.Email, &teacher.Class, &teacher.Subject)
 	if err == sql.ErrNoRows {
-		// http.Error(w, "Teacher not found", http.StatusNotFound)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Teacher not found.")
 	} else if err != nil {
-		// http.Error(w, "Database query error", http.StatusInternalServerError)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Database query error.")
 	}
 	return teacher, nil
 }
@@ -76,15 +69,13 @@ func GetTeacherByIdDB(idNum int) (models.Teacher, error) {
 func AddTeacherToDB(newTeachers []models.Teacher) ([]models.Teacher, error) {
 	db, err := ConnectToDB("school")
 	if err != nil {
-		// http.Error(w, "Could not establish DB connection.", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Could not establish DB connection.")
 	}
 	defer db.Close()
 
 	stmt, err := db.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES (?,?,?,?,?)")
 	if err != nil {
-		// http.Error(w, "Error in preparing DB query", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Error in preparing DB query")
 	}
 	defer stmt.Close()
 
@@ -98,14 +89,12 @@ func AddTeacherToDB(newTeachers []models.Teacher) ([]models.Teacher, error) {
 			newTeacher.Subject,
 		)
 		if err != nil {
-			// http.Error(w, "Error inserting data into DB.", http.StatusInternalServerError)
-			return nil, err
+			return nil, utils.ErrorHandler(err, "Error inserting data into DB.")
 		}
 
 		newId, err := resp.LastInsertId()
 		if err != nil {
-			// http.Error(w, "Error getting newly created ID.", http.StatusInternalServerError)
-			return nil, err
+			return nil, utils.ErrorHandler(err, "Error getting newly created ID.")
 		}
 		newTeacher.ID = int(newId)
 		addedTeachers[i] = newTeacher
@@ -117,9 +106,7 @@ func AddTeacherToDB(newTeachers []models.Teacher) ([]models.Teacher, error) {
 func UpdateTeacherDB(id int, updatedTeacher models.Teacher) (models.Teacher, error) {
 	db, err := ConnectToDB("teachers")
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error connecting to DB", http.StatusInternalServerError)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Error connecting to DB.")
 	}
 
 	defer db.Close()
@@ -128,14 +115,10 @@ func UpdateTeacherDB(id int, updatedTeacher models.Teacher) (models.Teacher, err
 
 	err = db.QueryRow("SELECT id, first_name, last_name, email, subject, class FROM teachers WHERE id = ?", id).Scan(&existingTeacher.ID, &existingTeacher.Class, &existingTeacher.Email, &existingTeacher.FirstName, &existingTeacher.LastName, &existingTeacher.Subject)
 	if err == sql.ErrNoRows {
-		log.Println(err)
-		// http.Error(w, "Teacher not found.", http.StatusNotFound)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Teacher not found.")
 	} else {
 		if err != nil {
-			log.Println(err)
-			// http.Error(w, "Retrieving teacher from DB.", http.StatusInternalServerError)
-			return models.Teacher{}, err
+			return models.Teacher{}, utils.ErrorHandler(err, "Retrieving teacher from DB.")
 		}
 	}
 
@@ -143,9 +126,7 @@ func UpdateTeacherDB(id int, updatedTeacher models.Teacher) (models.Teacher, err
 
 	_, err = db.Exec("UPDATE teachers SET first_name = ?, last_name = ?, email = ?, class = ?, subject = ? WHERE id = ?", updatedTeacher.FirstName, updatedTeacher.LastName, updatedTeacher.Email, updatedTeacher.Class, updatedTeacher.Subject, updatedTeacher.ID)
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error updating entry.", http.StatusInternalServerError)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Error updating entry.")
 	}
 	return updatedTeacher, nil
 }
@@ -153,25 +134,21 @@ func UpdateTeacherDB(id int, updatedTeacher models.Teacher) (models.Teacher, err
 func PatchMultipleTeachersDB(updates []map[string]any) error {
 	db, err := ConnectToDB("teachers")
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error connecting to DB", http.StatusInternalServerError)
-		return err
+		return utils.ErrorHandler(err, "Error connecting to DB.")
 	}
 
 	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error starting transaction.", http.StatusInternalServerError)
-		return err
+		return utils.ErrorHandler(err, "Error starting transaction.")
 	}
 
 	for _, update := range updates {
 		idStr, ok := update["id"].(string)
 		if !ok {
 			tx.Rollback()
-			// http.Error(w, "Invalid integer.", http.StatusBadRequest)
+			return utils.ErrorHandler(err, "Invalid integer.")
 		}
 
 		id, err := strconv.Atoi(idStr)
@@ -179,8 +156,7 @@ func PatchMultipleTeachersDB(updates []map[string]any) error {
 		if err != nil {
 			tx.Rollback()
 			if err == sql.ErrNoRows {
-				// http.Error(w, "Error converting ID to Int.", http.StatusNotFound)
-				return err
+				return utils.ErrorHandler(err, "Error converting ID to Int.")
 			}
 		}
 
@@ -189,12 +165,9 @@ func PatchMultipleTeachersDB(updates []map[string]any) error {
 		if err != nil {
 			tx.Rollback()
 			if err == sql.ErrNoRows {
-				// http.Error(w, "Teacher not found.", http.StatusNotFound)
-				return err
+				return utils.ErrorHandler(err, "Teacher not found.")
 			} else {
-				log.Println(err)
-				// http.Error(w, "Could not query row.", http.StatusInternalServerError)
-				return err
+				return utils.ErrorHandler(err, "Could not query row.")
 			}
 		}
 
@@ -216,8 +189,7 @@ func PatchMultipleTeachersDB(updates []map[string]any) error {
 							fieldVal.Set(val.Convert(fieldVal.Type()))
 						} else {
 							tx.Rollback()
-							log.Printf("Cannot convert %v to %v", val.Type(), fieldVal.Type())
-							return err
+							return utils.ErrorHandler(err, fmt.Sprintf("Cannot convert %v to %v", val.Type(), fieldVal.Type()))
 						}
 					}
 					break
@@ -228,15 +200,15 @@ func PatchMultipleTeachersDB(updates []map[string]any) error {
 
 		_, err = tx.Exec("UPDATE teachers SET first_name = ?, last_name = ?, class = ?, email = ?, subject = ? WHERE id = ?", teacherFromDb.FirstName, teacherFromDb.LastName, teacherFromDb.Class, teacherFromDb.Email, teacherFromDb.Subject)
 		if err != nil {
-			// http.Error(w, "Error updating teacher.", http.StatusInternalServerError)
 			tx.Rollback()
+			return utils.ErrorHandler(err, "Error updating teacher.")
 		}
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		// http.Error(w, "Could not commit changes.", http.StatusInternalServerError)
 		tx.Rollback()
+		return utils.ErrorHandler(err, "Could not commit changes.")
 	}
 	return nil
 }
@@ -244,9 +216,7 @@ func PatchMultipleTeachersDB(updates []map[string]any) error {
 func PatchSingleTeacherDB(id int, updates map[string]any) (models.Teacher, error) {
 	db, err := ConnectToDB("teachers")
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error connecting to DB", http.StatusInternalServerError)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Error connecting to DB.")
 	}
 
 	defer db.Close()
@@ -255,14 +225,10 @@ func PatchSingleTeacherDB(id int, updates map[string]any) (models.Teacher, error
 
 	err = db.QueryRow("SELECT id, first_name, last_name, email, subject, class FROM teachers WHERE id = ?", id).Scan(&existingTeacher.ID, &existingTeacher.Class, &existingTeacher.Email, &existingTeacher.FirstName, &existingTeacher.LastName, &existingTeacher.Subject)
 	if err == sql.ErrNoRows {
-		log.Println(err)
-		// http.Error(w, "Teacher not found.", http.StatusNotFound)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Teacher not found.")
 	} else {
 		if err != nil {
-			log.Println(err)
-			// http.Error(w, "Retrieving teacher from DB.", http.StatusInternalServerError)
-			return models.Teacher{}, err
+			return models.Teacher{}, utils.ErrorHandler(err, "Retrieving teacher from DB.")
 		}
 	}
 
@@ -285,9 +251,7 @@ func PatchSingleTeacherDB(id int, updates map[string]any) (models.Teacher, error
 
 	_, err = db.Exec("UPDATE teachers SET first_name = ?, last_name = ?, email = ?, class = ?, subject = ? WHERE id = ?", existingTeacher.FirstName, existingTeacher.LastName, existingTeacher.Email, existingTeacher.Class, existingTeacher.Subject, existingTeacher.ID)
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error updating entry.", http.StatusInternalServerError)
-		return models.Teacher{}, err
+		return models.Teacher{}, utils.ErrorHandler(err, "Error updating entry.")
 	}
 	return existingTeacher, nil
 }
@@ -295,30 +259,23 @@ func PatchSingleTeacherDB(id int, updates map[string]any) (models.Teacher, error
 func DeleteSingleTeacherDB(id int) error {
 	db, err := ConnectToDB("teachers")
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error connecting to DB", http.StatusInternalServerError)
-		return err
+		return utils.ErrorHandler(err, "Error connecting to DB")
 	}
 
 	defer db.Close()
 
 	result, err := db.Exec("DELETE FROM teachers WHERE id = ? ", id)
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Could not delete teacher.", http.StatusInternalServerError)
-		return err
+		return utils.ErrorHandler(err, "Could not delete teacher.")
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error retrieving delete result.", http.StatusInternalServerError)
-		return err
+		return utils.ErrorHandler(err, "Error retrieving delete result.")
 	}
 
 	if rowsAffected == 0 {
-		// http.Error(w, "Teacher not found.", http.StatusNotFound)
-		return err
+		return utils.ErrorHandler(err, "Teacher not found.")
 	}
 	return nil
 }
@@ -326,24 +283,18 @@ func DeleteSingleTeacherDB(id int) error {
 func DeleteMultipleTeachersDB(ids []int) ([]int, error) {
 	db, err := ConnectToDB("teachers")
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error connecting to DB", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Error connecting to DB.")
 	}
 	defer db.Close()
 	tx, err := db.Begin()
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error starting transaction to DB", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Error starting transaction to DB.")
 	}
 
 	stmt, err := tx.Prepare("DELETE FROM teachers WHERE id = ?")
 	if err != nil {
 		tx.Rollback()
-		log.Println(err)
-		// http.Error(w, "Could not prepare DB statement.", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Could not prepare DB statement.")
 	}
 	defer stmt.Close()
 
@@ -353,17 +304,13 @@ func DeleteMultipleTeachersDB(ids []int) ([]int, error) {
 		result, err := stmt.Exec(id)
 		if err != nil {
 			tx.Rollback()
-			log.Println(err)
-			// http.Error(w, "Error deleting teacher.", http.StatusInternalServerError)
-			return nil, err
+			return nil, utils.ErrorHandler(err, "Error deleting teacher.")
 		}
 
 		rowsAffected, err := result.RowsAffected()
 		if err != nil {
 			tx.Rollback()
-			log.Println(err)
-			// http.Error(w, "Error retrieving deleted results.", http.StatusInternalServerError)
-			return nil, err
+			return nil, utils.ErrorHandler(err, "Error retrieving deleted results.")
 		}
 
 		if rowsAffected > 0 {
@@ -372,22 +319,18 @@ func DeleteMultipleTeachersDB(ids []int) ([]int, error) {
 
 		if rowsAffected < 1 {
 			tx.Rollback()
-			// http.Error(w, fmt.Sprintf("ID %d does not exists", id), http.StatusInternalServerError)
-			return nil, err
+			return nil, utils.ErrorHandler(err, fmt.Sprintf("ID %d does not exists", id))
 		}
 
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		log.Println(err)
-		// http.Error(w, "Error commiting results.", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Error commiting results.")
 	}
 
 	if len(deletedIds) < 1 {
-		// http.Error(w, "Ids do not exist.", http.StatusInternalServerError)
-		return nil, err
+		return nil, utils.ErrorHandler(err, "Ids do not exist.")
 	}
 	return deletedIds, nil
 }

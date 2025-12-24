@@ -12,7 +12,6 @@ import (
 )
 
 func AddTeacher(w http.ResponseWriter, r *http.Request) {
-	// connect to DB
 
 	var newTeachers []models.Teacher
 	err := json.NewDecoder(r.Body).Decode(&newTeachers)
@@ -23,7 +22,7 @@ func AddTeacher(w http.ResponseWriter, r *http.Request) {
 
 	addedTeachers, err := sqlconnect.AddTeacherToDB(newTeachers)
 	if err != nil {
-		log.Print(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -49,6 +48,7 @@ func GetTeachers(w http.ResponseWriter, r *http.Request) {
 	var teachers []models.Teacher
 	teachers, err := sqlconnect.GetTeachersDB(teachers, r)
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -74,12 +74,13 @@ func GetTeacher(w http.ResponseWriter, r *http.Request) {
 	idNum, err := strconv.Atoi(idStr)
 	if err != nil {
 		fmt.Println(err)
+		http.Error(w, "Invalid ID.", http.StatusBadRequest)
 		return
 	}
 
 	teacher, err := sqlconnect.GetTeacherByIdDB(idNum)
 	if err != nil {
-		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -102,7 +103,7 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 
 	updatedTeacherFromDB, err := sqlconnect.UpdateTeacherDB(id, updatedTeacher)
 	if err != nil {
-		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -125,7 +126,7 @@ func PatchTeacher(w http.ResponseWriter, r *http.Request) {
 
 	updatedTeacher, err := sqlconnect.PatchSingleTeacherDB(id, updates)
 	if err != nil {
-		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -146,7 +147,7 @@ func PatchTeachers(w http.ResponseWriter, r *http.Request) {
 
 	err = sqlconnect.PatchMultipleTeachersDB(updates)
 	if err != nil {
-		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -166,7 +167,7 @@ func DeleteTeacher(w http.ResponseWriter, r *http.Request) {
 
 	err = sqlconnect.DeleteSingleTeacherDB(id)
 	if err != nil {
-		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -194,7 +195,7 @@ func DeleteTeachers(w http.ResponseWriter, r *http.Request) {
 
 	deletedIds, err := sqlconnect.DeleteMultipleTeachersDB(ids)
 	if err != nil {
-		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
