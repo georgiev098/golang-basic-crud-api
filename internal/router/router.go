@@ -13,6 +13,8 @@ func Rotuer() *http.ServeMux {
 
 	mux.HandleFunc("GET /teachers/", handlers.GetTeachers)
 	mux.HandleFunc("POST /teachers/", handlers.AddTeacher)
+	mux.HandleFunc("PATCH /teachers/", handlers.PatchTeachers)
+	mux.HandleFunc("DELETE /teachers/{id}", handlers.DeleteTeachers)
 
 	mux.HandleFunc("GET /teachers/{id}", handlers.GetTeacher)
 	mux.HandleFunc("PUT /teachers/{id}", handlers.UpdateTeacher)

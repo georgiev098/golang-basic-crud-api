@@ -78,23 +78,6 @@ func AddTeacher(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func isValidSortOrder(order string) bool {
-	return order == "asc" || order == "desc"
-}
-
-func isValidSortField(field string) bool {
-	validFields := map[string]bool{
-		"first_name": true,
-		"last_name":  true,
-		"email":      true,
-		"class":      true,
-		"subject":    true,
-	}
-
-	return validFields[field]
-
-}
-
 func GetTeachers(w http.ResponseWriter, r *http.Request) {
 	db, err := sqlconnect.ConnectToDB("school")
 	if err != nil {
@@ -178,34 +161,8 @@ func GetTeacher(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(teacher)
 }
 
-func addSorting(r *http.Request, query string) string {
-	sortParams := r.URL.Query()["sort-by"]
-	if len(sortParams) > 0 {
-		query += " ORDER BY "
-		for i, param := range sortParams {
-			parts := strings.Split(param, ":")
-			if len(parts) != 2 {
-				continue
-			}
-
-			field, order := parts[0], parts[1]
-
-			if !isValidSortField(field) || !isValidSortOrder(order) {
-				continue
-			}
-			if i > 0 {
-				query += ","
-			}
-
-			query += " " + field + " " + order
-		}
-	}
-	return query
-}
-
 func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
-	idStr := strings.TrimPrefix(r.URL.Path, "/teachers/")
-
+	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		log.Println(err)
@@ -255,8 +212,7 @@ func UpdateTeacher(w http.ResponseWriter, r *http.Request) {
 }
 
 func PatchTeacher(w http.ResponseWriter, r *http.Request) {
-	idStr := strings.TrimPrefix(r.URL.Path, "/teachers/")
-
+	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		log.Println(err)
@@ -321,8 +277,109 @@ func PatchTeacher(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func PatchTeachers(w http.ResponseWriter, r *http.Request) {
+	db, err := sqlconnect.ConnectToDB("teachers")
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Error connecting to DB", http.StatusInternalServerError)
+		return
+	}
+
+	defer db.Close()
+
+	var updates []map[string]any
+	err = json.NewDecoder(r.Body).Decode(&updates)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid request payload.", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Error starting transaction.", http.StatusInternalServerError)
+		return
+	}
+
+	for _, update := range updates {
+		idStr, ok := update["id"].(string)
+		if !ok {
+			tx.Rollback()
+			http.Error(w, "Invalid integer.", http.StatusBadRequest)
+		}
+
+		id, err := strconv.Atoi(idStr)
+
+		if err != nil {
+			tx.Rollback()
+			if err == sql.ErrNoRows {
+				http.Error(w, "Error converting ID to Int.", http.StatusNotFound)
+				return
+			}
+		}
+
+		var teacherFromDb models.Teacher
+		err = db.QueryRow("SELECT id, first_name, last_name, email, class, subject FROM teachers WHERE id = ? ", id).Scan(&teacherFromDb.ID, &teacherFromDb.Class, &teacherFromDb.Email, &teacherFromDb.FirstName, &teacherFromDb.LastName, &teacherFromDb.Subject)
+		if err != nil {
+			tx.Rollback()
+			if err == sql.ErrNoRows {
+				http.Error(w, "Teacher not found.", http.StatusNotFound)
+				return
+			} else {
+				log.Println(err)
+				http.Error(w, "Could not query row.", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		teacherVal := reflect.ValueOf(&teacherFromDb).Elem()
+		teacherType := teacherVal.Type()
+
+		for k, v := range update {
+			if k == "id" {
+				continue
+			}
+			for i := 0; i < teacherVal.NumField(); i++ {
+				field := teacherType.Field(i)
+
+				if field.Tag.Get("json") == k+" ,omitempty" {
+					fieldVal := teacherVal.Field(i)
+					if fieldVal.CanSet() {
+						val := reflect.ValueOf(v)
+						if val.Type().ConvertibleTo(fieldVal.Type()) {
+							fieldVal.Set(val.Convert(fieldVal.Type()))
+						} else {
+							tx.Rollback()
+							log.Printf("Cannot convert %v to %v", val.Type(), fieldVal.Type())
+							return
+						}
+					}
+					break
+				}
+
+			}
+		}
+
+		_, err = tx.Exec("UPDATE teachers SET first_name = ?, last_name = ?, class = ?, email = ?, subject = ? WHERE id = ?", teacherFromDb.FirstName, teacherFromDb.LastName, teacherFromDb.Class, teacherFromDb.Email, teacherFromDb.Subject)
+		if err != nil {
+			http.Error(w, "Error updating teacher.", http.StatusInternalServerError)
+			tx.Rollback()
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		http.Error(w, "Could not commit changes.", http.StatusInternalServerError)
+		tx.Rollback()
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+}
+
 func DeleteTeacher(w http.ResponseWriter, r *http.Request) {
-	idStr := strings.TrimPrefix(r.URL.Path, "/teachers/")
+	idStr := r.PathValue("id")
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -369,6 +426,94 @@ func DeleteTeacher(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func DeleteTeachers(w http.ResponseWriter, r *http.Request) {
+	db, err := sqlconnect.ConnectToDB("teachers")
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Error connecting to DB", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	var ids []int
+	err = json.NewDecoder(r.Body).Decode(&ids)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Error starting transaction to DB", http.StatusInternalServerError)
+		return
+	}
+
+	stmt, err := tx.Prepare("DELETE FROM teachers WHERE id = ?")
+	if err != nil {
+		tx.Rollback()
+		log.Println(err)
+		http.Error(w, "Could not prepare DB statement.", http.StatusInternalServerError)
+		return
+	}
+	defer stmt.Close()
+
+	deletedIds := []int{}
+
+	for _, id := range ids {
+		result, err := stmt.Exec(id)
+		if err != nil {
+			tx.Rollback()
+			log.Println(err)
+			http.Error(w, "Error deleting teacher.", http.StatusInternalServerError)
+			return
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			log.Println(err)
+			http.Error(w, "Error retrieving deleted results.", http.StatusInternalServerError)
+			return
+		}
+
+		if rowsAffected > 0 {
+			deletedIds = append(deletedIds, id)
+		}
+
+		if rowsAffected < 1 {
+			tx.Rollback()
+			http.Error(w, fmt.Sprintf("ID %d does not exists", id), http.StatusInternalServerError)
+			return
+		}
+
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Error commiting results.", http.StatusInternalServerError)
+		return
+	}
+
+	if len(deletedIds) < 1 {
+		http.Error(w, "Ids do not exist.", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := struct {
+		Status     string `json:"status"`
+		DeletedIds []int  `json:"deleted_ids"`
+	}{
+		Status:     "Teachers deleted.",
+		DeletedIds: deletedIds,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
 func addFilters(r *http.Request, query string, args []any) (string, []any) {
 	params := map[string]string{
 		"first_name": "first_name",
@@ -387,4 +532,46 @@ func addFilters(r *http.Request, query string, args []any) (string, []any) {
 	}
 
 	return query, args
+}
+
+func addSorting(r *http.Request, query string) string {
+	sortParams := r.URL.Query()["sort-by"]
+	if len(sortParams) > 0 {
+		query += " ORDER BY "
+		for i, param := range sortParams {
+			parts := strings.Split(param, ":")
+			if len(parts) != 2 {
+				continue
+			}
+
+			field, order := parts[0], parts[1]
+
+			if !isValidSortField(field) || !isValidSortOrder(order) {
+				continue
+			}
+			if i > 0 {
+				query += ","
+			}
+
+			query += " " + field + " " + order
+		}
+	}
+	return query
+}
+
+func isValidSortOrder(order string) bool {
+	return order == "asc" || order == "desc"
+}
+
+func isValidSortField(field string) bool {
+	validFields := map[string]bool{
+		"first_name": true,
+		"last_name":  true,
+		"email":      true,
+		"class":      true,
+		"subject":    true,
+	}
+
+	return validFields[field]
+
 }
